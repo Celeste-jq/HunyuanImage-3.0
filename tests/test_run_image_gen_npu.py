@@ -38,6 +38,22 @@ def test_npu_entrypoint_defaults_to_non_streaming_verbose_level(monkeypatch):
     assert args.verbose == 1
 
 
+def test_npu_entrypoint_guidance_scale_defaults_to_model_value(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["run_image_gen_npu.py", "--prompt", "p"])
+
+    args = parse_args()
+
+    assert args.guidance_scale is None
+
+
+def test_npu_entrypoint_can_override_guidance_scale(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["run_image_gen_npu.py", "--prompt", "p", "--guidance-scale", "1.0"])
+
+    args = parse_args()
+
+    assert args.guidance_scale == 1.0
+
+
 def test_npu_debug_flag_defaults_off(monkeypatch):
     monkeypatch.setattr("sys.argv", ["run_image_gen_npu.py", "--prompt", "p"])
 

@@ -31,6 +31,14 @@ def test_prepare_model_inputs_has_npu_diagnostics():
     assert "cond_vit_image_kwargs" in source
 
 
+def test_generate_uses_runtime_guidance_scale_override():
+    source = MODELING_SOURCE.read_text()
+
+    assert 'guidance_scale = kwargs.pop("guidance_scale", None)' in source
+    assert "guidance_scale = default(guidance_scale, gen_config.diff_guidance_scale)" in source
+    assert "guidance_scale=guidance_scale" in source
+
+
 def test_vae_runtime_paths_do_not_allocate_cuda_directly():
     source = AUTOENCODER_SOURCE.read_text()
 

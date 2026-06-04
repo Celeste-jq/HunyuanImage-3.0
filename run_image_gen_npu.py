@@ -93,6 +93,12 @@ def parse_args():
     )
     parser.add_argument("--save", type=str, default="image.png", help="Path to save the generated image")
     parser.add_argument("--verbose", type=int, default=1, help="Verbose level")
+    parser.add_argument(
+        "--guidance-scale",
+        type=float,
+        default=None,
+        help="Override the diffusion guidance scale used during image generation. Use 1.0 to disable extra guidance.",
+    )
     parser.add_argument("--rewrite", type=int, default=0, help="Whether to rewrite the prompt with DeepSeek")
     parser.add_argument("--reproduce", action="store_true", help="Whether to reproduce the results")
     parser.add_argument(
@@ -262,6 +268,7 @@ def main(args):
         diff_infer_steps=args.diff_infer_steps,
         verbose=args.verbose,
         max_new_tokens=args.max_new_tokens,
+        guidance_scale=args.guidance_scale,
         image=image_input,
         debug_npu=args.debug_npu,
         infer_align_image_size=args.infer_align_image_size,
