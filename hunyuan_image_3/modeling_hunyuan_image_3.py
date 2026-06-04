@@ -16,6 +16,7 @@ import random
 import re
 import time
 import warnings
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import List, Union, Optional, Dict, Any, Tuple, Callable, TYPE_CHECKING
 from datetime import datetime
@@ -48,6 +49,13 @@ from transformers.utils import (
     logging,
 )
 from .token_slice_utils import normalize_token_slices
+
+
+def optional_nvtx_range(message: str):
+    if torch.cuda.is_available():
+        return nvtx.range(message)
+    return nullcontext()
+
 
 try:
     import flashinfer
@@ -1171,7 +1179,8 @@ class HunyuanMoE(nn.Module):
             assert flashinfer is not None, "When using fused_moe, flashinfer must be installed."
 
     def forward(self, hidden_states):
-        torch.cuda.set_device(hidden_states.device.index)
+        if hidden_states.device.type == "cuda":
+            torch.cuda.set_device(hidden_states.device.index)
         bsz, seq_len, hidden_size = hidden_states.shape
         input_hidden_states = hidden_states
 
@@ -1180,7 +1189,7 @@ class HunyuanMoE(nn.Module):
 
         reshaped_input = hidden_states.reshape(-1, hidden_size) # [bsz*seq_len, hidden_size]
 
-        with nvtx.range("MoE"):
+        with optional_nvtx_range("MoE"):
             if self._moe_impl == "flashinfer":
                 # Get expert weights
                 if not self._weights_initialized:
@@ -1202,7 +1211,7 @@ class HunyuanMoE(nn.Module):
             else:
                 # DeepSeekMoE implementation
                 # Reference: https://huggingface.co/deepseek-ai/deepseek-moe-16b-chat/blob/main/modeling_deepseek.py#L375
-                with torch.autocast('cuda', enabled=False):
+                with torch.autocast(hidden_states.device.type, enabled=False):
                     topk_weights, topk_idx = self.gate(hidden_states, topk_impl='easy')
                 # Cast back to the input dtype
                 topk_weights = topk_weights.to(hidden_states.dtype)
