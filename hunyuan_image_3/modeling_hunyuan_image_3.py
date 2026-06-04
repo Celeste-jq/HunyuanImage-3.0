@@ -3197,6 +3197,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
     ):
         gen_config = default(generation_config, self.generation_config)
         guidance_scale = kwargs.pop("guidance_scale", None)
+        guidance_scale = default(guidance_scale, gen_config.diff_guidance_scale)
         mode = kwargs.get("mode", "gen_text")
         output = kwargs["tokenizer_output"]
         indices = torch.where(output.tokens[0] == self._tokenizer.encode("<img>")[0])[0]
@@ -3224,7 +3225,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                     ("image_size",
                      [f"{info.image_height}x{info.image_width}" for info in kwargs["batch_gen_image_info"]]),
                     ("infer_steps", gen_config.diff_infer_steps),
-                    ("guidance_scale", gen_config.diff_guidance_scale),
+                    ("guidance_scale", guidance_scale),
                     ("flow_shift", gen_config.flow_shift),
                 ])
             else:
@@ -3285,7 +3286,6 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             batch_gen_image_info: list[ImageInfo] = kwargs.get("batch_gen_image_info")
             if batch_gen_image_info is None:
                 raise ValueError("`batch_gen_image_info` should be provided when `mode` is `gen_image`.")
-            guidance_scale = default(guidance_scale, gen_config.diff_guidance_scale)
             self.num_image_tokens = (batch_gen_image_info[0].image_token_length) 
             #                       + (1 if batch_gen_image_info[0].add_timestep_token else 0)
             #                       + (1 if batch_gen_image_info[0].add_guidance_token else 0) )
