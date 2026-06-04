@@ -2921,7 +2921,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
                 "past_key_values": past_key_values,
-                # "use_cache": kwargs.get("use_cache"),
+                "use_cache": kwargs.get("use_cache"),
                 "rope_image_info": kwargs["rope_image_info"],
                 "mode": kwargs["mode"],
                 "images": kwargs.get("images"),
@@ -2961,6 +2961,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             "mode": mode,
             "rope_image_info": model_kwargs["rope_image_info"],
         }
+        updated_model_kwargs["use_cache"] = model_kwargs.get("use_cache")
 
         # update past_key_values keeping its naming used in model code
         for possible_cache_name in ALL_CACHE_NAMES:
