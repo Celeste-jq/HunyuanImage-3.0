@@ -16,7 +16,7 @@ import random
 import re
 import time
 import warnings
-from contextlib import nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Union, Optional, Dict, Any, Tuple, Callable, TYPE_CHECKING
 from datetime import datetime
@@ -51,10 +51,18 @@ from transformers.utils import (
 from .token_slice_utils import normalize_token_slices
 
 
+@contextmanager
 def optional_nvtx_range(message: str):
-    if torch.cuda.is_available():
-        return nvtx.range(message)
-    return nullcontext()
+    try:
+        nvtx.range_push(message)
+    except RuntimeError:
+        yield
+        return
+
+    try:
+        yield
+    finally:
+        nvtx.range_pop()
 
 
 try:
