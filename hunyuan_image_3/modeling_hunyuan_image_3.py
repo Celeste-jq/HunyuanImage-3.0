@@ -159,6 +159,16 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
 
 
+def _lazy_initialization_compat(layer, key_states, value_states):
+    try:
+        layer.lazy_initialization(key_states, value_states)
+    except TypeError as exc:
+        message = str(exc)
+        if "positional argument" not in message and "required positional argument" not in message:
+            raise
+        layer.lazy_initialization(key_states)
+
+
 def real_batched_index_select(t, dim, idx):
     """ index_select for batched index and batched t """
     assert t.ndim >= 2 and idx.ndim >= 2, f"{t.ndim=} {idx.ndim=}"
@@ -952,7 +962,7 @@ class HunyuanStaticCache(StaticCache):
         """
         cache_position = cache_kwargs.get("cache_position")
         if self.layers[layer_idx].keys is None:
-            self.layers[layer_idx].lazy_initialization(key_states, value_states)
+            _lazy_initialization_compat(self.layers[layer_idx], key_states, value_states)
         k_out = self.layers[layer_idx].keys
         v_out = self.layers[layer_idx].values
 

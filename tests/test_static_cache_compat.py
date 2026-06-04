@@ -1,10 +1,12 @@
 from pathlib import Path
 
 
-def test_hunyuan_static_cache_initializes_static_layers_with_key_and_value_states():
+def test_hunyuan_static_cache_initializes_static_layers_with_compatible_signature():
     source = Path("hunyuan_image_3/modeling_hunyuan_image_3.py").read_text()
 
-    assert "lazy_initialization(key_states, value_states)" in source
+    assert "def _lazy_initialization_compat(layer, key_states, value_states):" in source
+    assert "_lazy_initialization_compat(self.layers[layer_idx], key_states, value_states)" in source
+    assert "except TypeError as exc:" in source
 
 
 def test_moe_forward_does_not_require_cuda_nvtx():
