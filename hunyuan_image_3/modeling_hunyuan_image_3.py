@@ -48,6 +48,7 @@ from transformers.utils import (
     is_flash_attn_2_available,
     logging,
 )
+from .device_utils import device_autocast
 from .token_slice_utils import normalize_token_slices
 
 
@@ -138,6 +139,10 @@ def to_device(data, device):
         return data.to(device)
     elif isinstance(data, list):
         return [to_device(x, device) for x in data]
+    elif isinstance(data, tuple):
+        return tuple(to_device(x, device) for x in data)
+    elif isinstance(data, dict):
+        return {key: to_device(value, device) for key, value in data.items()}
     else:
         return data
 
@@ -2444,8 +2449,8 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
     def vae_encode(self, image, cfg_factor=1, generator=None):
         config = self.vae.config
 
-        with torch.autocast(
-                device_type="cuda", dtype=self.vae_autocast_dtype,  # noqa
+        with device_autocast(
+                image, dtype=self.vae_autocast_dtype,
                 enabled=self.vae_autocast_dtype != torch.float32
         ):
             vae_encode_result = self.vae.encode(image)
@@ -2745,6 +2750,59 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
 
         return out
 
+    @staticmethod
+    def _describe_debug_value(value, depth=0):
+        if value is None:
+            return "None"
+        if isinstance(value, torch.Tensor):
+            return f"Tensor(shape={tuple(value.shape)}, device={value.device}, dtype={value.dtype})"
+        if isinstance(value, dict):
+            parts = [
+                f"{key}: {HunyuanImage3ForCausalMM._describe_debug_value(item, depth + 1)}"
+                for key, item in value.items()
+            ]
+            return "{" + ", ".join(parts) + "}"
+        if isinstance(value, list):
+            preview = [
+                HunyuanImage3ForCausalMM._describe_debug_value(item, depth + 1)
+                for item in value[:2]
+            ]
+            suffix = ", ..." if len(value) > 2 else ""
+            return f"list(len={len(value)}, items=[{', '.join(preview)}{suffix}])"
+        if isinstance(value, tuple):
+            preview = [
+                HunyuanImage3ForCausalMM._describe_debug_value(item, depth + 1)
+                for item in value[:2]
+            ]
+            suffix = ", ..." if len(value) > 2 else ""
+            return f"tuple(len={len(value)}, items=({', '.join(preview)}{suffix}))"
+        return type(value).__name__
+
+    def _print_npu_debug_info(self, mode, model_input_kwargs, batch_cond_images):
+        if batch_cond_images is None:
+            cond_summary = "None"
+        else:
+            cond_summary = [
+                [getattr(cond_image, "section_type", type(cond_image).__name__) for cond_image in cond_images]
+                for cond_images in batch_cond_images
+            ]
+
+        print("NPU debug model inputs:", flush=True)
+        print(f"  mode: {mode}", flush=True)
+        print(f"  model.device: {self.device}", flush=True)
+        print(f"  model.dtype: {self.dtype}", flush=True)
+        print(f"  batch_cond_images: {cond_summary}", flush=True)
+        for key in [
+            "input_ids",
+            "cond_vae_images",
+            "cond_vae_image_mask",
+            "cond_timesteps",
+            "cond_vit_images",
+            "cond_vit_image_mask",
+            "cond_vit_image_kwargs",
+        ]:
+            print(f"  {key}: {self._describe_debug_value(model_input_kwargs.get(key))}", flush=True)
+
     def prepare_model_inputs(
             self,
             prompt: str | list[str] = None,
@@ -2759,6 +2817,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             **kwargs,
     ):
         device = default(device, self.device)
+        debug_npu = kwargs.get("debug_npu", False)
 
         # 1. apply chat template
         cfg_factor = {"gen_text": 1, "gen_image": 2}
@@ -2871,6 +2930,8 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             max_new_tokens=max_new_tokens,
             gen_timestep_scatter_index=to_device(output.gen_timestep_scatter_index, device),
         )
+        if debug_npu:
+            self._print_npu_debug_info(mode, model_input_kwargs, batch_cond_images)
 
         return model_input_kwargs
 
@@ -3176,7 +3237,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             if verbose >= 2 and streamer is None:
                 streamer = TextStreamer(self._tokenizer, skip_prompt=True, skip_special_tokens=False)   # noqa
 
-            with torch.autocast(device_type="cuda", dtype=self.dtype, enabled=self.dtype != torch.float32):
+            with device_autocast(kwargs.get("input_ids", self.device), dtype=self.dtype, enabled=self.dtype != torch.float32):
                 if stage_transitions is not None:
                     if final_stop_tokens is None:
                         raise ValueError("`final_stop_tokens` must be provided when `stage_transitions` is set.")
@@ -3277,6 +3338,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
     ):
         max_new_tokens = kwargs.pop("max_new_tokens", 2048)
         cot_text = kwargs.pop("cot_text", None)
+        debug_npu = kwargs.pop("debug_npu", False)
 
         use_system_prompt = default(use_system_prompt, self.generation_config.use_system_prompt)
         bot_task = default(bot_task, self.generation_config.bot_task)
@@ -3330,6 +3392,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                 prompt=prompt, image=image, message_list=message_list, system_prompt=system_prompt,
                 max_new_tokens=max_new_tokens, mode="gen_text", bot_task=first_bot_task,
                 batch_cond_images=batch_cond_images_cache, infer_align_image_size=infer_align_image_size,
+                debug_npu=debug_npu,
             )
             batch_cond_images_cache = model_inputs['batch_cond_images']
             logits_processor = None
@@ -3398,6 +3461,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                 prompt=prompt, image=image, cot_text=cot_text, message_list=message_list, max_new_tokens=1,
                 system_prompt=system_prompt, seed=seed, mode="gen_text", bot_task="img_ratio",
                 batch_cond_images=batch_cond_images_cache, infer_align_image_size=infer_align_image_size,
+                debug_npu=debug_npu,
             )
             batch_cond_images_cache = model_inputs['batch_cond_images']
             outputs = self.generate(**model_inputs, do_sample=False, logits_processor=self.image_processor.img_ratio_slice_logits_processor, **kwargs)
@@ -3410,7 +3474,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
         model_inputs = self.prepare_model_inputs(
             prompt=prompt, image=image, cot_text=cot_text, message_list=message_list, system_prompt=system_prompt,
             seed=seed, image_size=image_size, mode="gen_image", batch_cond_images=batch_cond_images_cache,
-            infer_align_image_size=infer_align_image_size,
+            infer_align_image_size=infer_align_image_size, debug_npu=debug_npu,
         )
         batch_cond_images_cache = model_inputs['batch_cond_images']
         outputs = self.generate(**model_inputs, **kwargs)

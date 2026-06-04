@@ -92,13 +92,18 @@ def parse_args():
         ),
     )
     parser.add_argument("--save", type=str, default="image.png", help="Path to save the generated image")
-    parser.add_argument("--verbose", type=int, default=2, help="Verbose level")
+    parser.add_argument("--verbose", type=int, default=1, help="Verbose level")
     parser.add_argument("--rewrite", type=int, default=0, help="Whether to rewrite the prompt with DeepSeek")
     parser.add_argument("--reproduce", action="store_true", help="Whether to reproduce the results")
     parser.add_argument(
         "--infer-align-image-size",
         action="store_true",
         help="Whether to align the target image size to the src image size.",
+    )
+    parser.add_argument(
+        "--debug-npu",
+        action="store_true",
+        help="Print NPU device, dtype, device_map, and condition-image tensor diagnostics.",
     )
     parser.add_argument("--use-taylor-cache", action="store_true", help="Use Taylor Cache when sampling.")
     parser.add_argument("--taylor-cache-interval", type=int, default=5, help="Interval of Taylor Cache.")
@@ -240,6 +245,9 @@ def main(args):
 
     model = HunyuanImage3ForCausalMM.from_pretrained(args.model_id, **build_model_kwargs(args))
     model.load_tokenizer(args.model_id)
+    if args.debug_npu:
+        print(f"NPU debug: model.device={model.device}, dtype={model.dtype}")
+        print(f"NPU debug: hf_device_map={getattr(model, 'hf_device_map', None)}")
 
     image_input = parse_image_input(args.image)
     prompt = rewrite_prompt_if_needed(args)
@@ -255,6 +263,7 @@ def main(args):
         verbose=args.verbose,
         max_new_tokens=args.max_new_tokens,
         image=image_input,
+        debug_npu=args.debug_npu,
         infer_align_image_size=args.infer_align_image_size,
         use_taylor_cache=args.use_taylor_cache,
         taylor_cache_interval=args.taylor_cache_interval,

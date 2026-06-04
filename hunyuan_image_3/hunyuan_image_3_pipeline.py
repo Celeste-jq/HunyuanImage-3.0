@@ -43,6 +43,7 @@ from diffusers.schedulers.scheduling_utils import SchedulerMixin
 from diffusers.utils import BaseOutput, logging
 from diffusers.utils.torch_utils import randn_tensor
 from .cache_utils import cache_init
+from .device_utils import device_autocast
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
@@ -855,7 +856,7 @@ class HunyuanImage3Text2ImagePipeline(DiffusionPipeline):
                     timesteps=t_expand,
                     **model_kwargs,
                 )
-                with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=True):
+                with device_autocast(latent_model_input, dtype=torch.bfloat16, enabled=True):
                     model_output = self.model(**model_inputs, first_step=(i == 0))
                     pred = model_output["diffusion_prediction"]
                 pred = pred.to(dtype=torch.float32)
@@ -901,7 +902,7 @@ class HunyuanImage3Text2ImagePipeline(DiffusionPipeline):
         if hasattr(self.vae, "ffactor_temporal"):
             latents = latents.unsqueeze(2)
 
-        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=True):
+        with device_autocast(latents, dtype=torch.float16, enabled=True):
             image = self.vae.decode(latents, return_dict=False, generator=generator)[0]
 
         # b c t h w

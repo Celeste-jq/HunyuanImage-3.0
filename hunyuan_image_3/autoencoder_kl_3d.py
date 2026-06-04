@@ -499,7 +499,7 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
 
         self.use_compile = False
 
-        self.empty_cache = torch.empty(0, device="cuda")
+        self.empty_cache = torch.empty(0)
 
     def _set_gradient_checkpointing(self, module, value=False):
         if isinstance(module, (Encoder, Decoder)):
@@ -824,7 +824,7 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
             decoded = _decode(z)
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() != 0:
-                return self.empty_cache
+                return self.empty_cache.to(z.device)
 
         if z.shape[-3] == 1:
             decoded = decoded[:, :, -1:]
@@ -834,7 +834,7 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
         return DecoderOutput(sample=decoded)
 
     def decode_dist(self, z: Tensor, return_dict: bool = True, generator=None):
-        z = z.cuda()
+        z = z.to(next(self.parameters()).device)
         self.use_spatial_tiling = True
         decoded = self.decode(z)
         self.use_spatial_tiling = False
