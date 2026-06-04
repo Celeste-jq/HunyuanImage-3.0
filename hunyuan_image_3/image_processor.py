@@ -28,7 +28,7 @@ from torchvision import transforms
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.image_utils import load_image
 from transformers.models.siglip2.image_processing_siglip2_fast import Siglip2ImageProcessorFast
-from .processor_output_utils import unwrap_single_batch_value
+from .processor_output_utils import scalar_to_int, unwrap_single_batch_value
 from .token_slice_utils import normalize_token_slices
 from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList
 
@@ -372,12 +372,14 @@ class HunyuanImage3ImageProcessor(object):
             # Extract spatial shapes and attention mask for SigLIP2 encoding
             spatial_shapes = kwargs["spatial_shapes"]  # 2  (h, w)
             pixel_attention_mask = kwargs["pixel_attention_mask"]  # seq_len
+            token_height = scalar_to_int(spatial_shapes[0])
+            token_width = scalar_to_int(spatial_shapes[1])
             tensor.i = ImageInfo(
                 image_type=image_type,
-                image_width=spatial_shapes[1].item() * self.vit_info.w_factor,
-                image_height=spatial_shapes[0].item() * self.vit_info.h_factor,
-                token_width=spatial_shapes[1].item(),
-                token_height=spatial_shapes[0].item(),
+                image_width=token_width * self.vit_info.w_factor,
+                image_height=token_height * self.vit_info.h_factor,
+                token_width=token_width,
+                token_height=token_height,
                 image_token_length=self.vit_info.max_token_length,
                 ori_image_width=ori_image_width,
                 ori_image_height=ori_image_height,
@@ -434,13 +436,17 @@ class HunyuanImage3ImageProcessor(object):
         origin_size = image.size
         # Process image through ViT processor
         inputs = self.vit_info.processor(image)
-        image = unwrap_single_batch_value(inputs["pixel_values"])   # (seq_len, dim)
+        image = torch.as_tensor(unwrap_single_batch_value(inputs["pixel_values"]))   # (seq_len, dim)
 
         # Extract additional processor outputs (spatial shapes, attention masks, etc.)
         remain_keys = set(inputs.keys()) - {"pixel_values"}
         remain_kwargs = {}
         for key in remain_keys:
             remain_kwargs[key] = unwrap_single_batch_value(inputs[key])
+        if "spatial_shapes" in remain_kwargs:
+            remain_kwargs["spatial_shapes"] = torch.as_tensor(remain_kwargs["spatial_shapes"], dtype=torch.long)
+        if "pixel_attention_mask" in remain_kwargs:
+            remain_kwargs["pixel_attention_mask"] = torch.as_tensor(remain_kwargs["pixel_attention_mask"])
 
         return self.as_image_tensor(
             image,

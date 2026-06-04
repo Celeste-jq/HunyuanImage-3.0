@@ -14,3 +14,10 @@ def unwrap_single_batch_value(value):
         return squeeze(0)
 
     return value
+
+
+def scalar_to_int(value) -> int:
+    item = getattr(value, "item", None)
+    if callable(item):
+        value = item()
+    return int(value)
