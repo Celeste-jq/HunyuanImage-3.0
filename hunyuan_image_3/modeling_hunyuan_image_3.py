@@ -3196,6 +3196,8 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             **kwargs,
     ):
         gen_config = default(generation_config, self.generation_config)
+        diff_infer_steps = kwargs.pop("diff_infer_steps", None)
+        diff_infer_steps = default(diff_infer_steps, gen_config.diff_infer_steps)
         guidance_scale = kwargs.pop("guidance_scale", None)
         guidance_scale = default(guidance_scale, gen_config.diff_guidance_scale)
         mode = kwargs.get("mode", "gen_text")
@@ -3224,7 +3226,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                 info_list.extend([
                     ("image_size",
                      [f"{info.image_height}x{info.image_width}" for info in kwargs["batch_gen_image_info"]]),
-                    ("infer_steps", gen_config.diff_infer_steps),
+                    ("infer_steps", diff_infer_steps),
                     ("guidance_scale", guidance_scale),
                     ("flow_shift", gen_config.flow_shift),
                 ])
@@ -3295,7 +3297,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
             results = self.pipeline(
                 batch_size=len(batch_gen_image_info),
                 image_size=[batch_gen_image_info[0].image_height, batch_gen_image_info[0].image_width],
-                num_inference_steps=gen_config.diff_infer_steps,
+                num_inference_steps=diff_infer_steps,
                 guidance_scale=guidance_scale,
                 generator=generator,
                 meanflow=self.config.use_meanflow,

@@ -40,6 +40,15 @@ def test_generate_uses_runtime_guidance_scale_override():
     assert '("guidance_scale", guidance_scale)' in source
 
 
+def test_generate_uses_runtime_diff_infer_steps_override():
+    source = MODELING_SOURCE.read_text()
+
+    assert 'diff_infer_steps = kwargs.pop("diff_infer_steps", None)' in source
+    assert "diff_infer_steps = default(diff_infer_steps, gen_config.diff_infer_steps)" in source
+    assert "num_inference_steps=diff_infer_steps" in source
+    assert '("infer_steps", diff_infer_steps)' in source
+
+
 def test_vae_runtime_paths_do_not_allocate_cuda_directly():
     source = AUTOENCODER_SOURCE.read_text()
 
