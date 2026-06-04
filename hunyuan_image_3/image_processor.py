@@ -28,6 +28,7 @@ from torchvision import transforms
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.image_utils import load_image
 from transformers.models.siglip2.image_processing_siglip2_fast import Siglip2ImageProcessorFast
+from .processor_output_utils import unwrap_single_batch_value
 from .token_slice_utils import normalize_token_slices
 from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList
 
@@ -433,16 +434,13 @@ class HunyuanImage3ImageProcessor(object):
         origin_size = image.size
         # Process image through ViT processor
         inputs = self.vit_info.processor(image)
-        image = inputs["pixel_values"].squeeze(0)   # (seq_len, dim)
+        image = unwrap_single_batch_value(inputs["pixel_values"])   # (seq_len, dim)
 
         # Extract additional processor outputs (spatial shapes, attention masks, etc.)
         remain_keys = set(inputs.keys()) - {"pixel_values"}
         remain_kwargs = {}
         for key in remain_keys:
-            if isinstance(inputs[key], torch.Tensor):
-                remain_kwargs[key] = inputs[key].squeeze(0)
-            else:
-                remain_kwargs[key] = inputs[key]
+            remain_kwargs[key] = unwrap_single_batch_value(inputs[key])
 
         return self.as_image_tensor(
             image,
