@@ -47,6 +47,7 @@ from transformers.utils import (
     is_flash_attn_2_available,
     logging,
 )
+from .token_slice_utils import normalize_token_slices
 
 try:
     import flashinfer
@@ -3299,7 +3300,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                     (transition_id, answer_prefix_tokens + [tkw.boi_token_id, tkw.size_token_id(image_base_size)])
                 )
                 final_stop_tokens = list(range(tkw.start_ratio_token_id, tkw.end_ratio_token_id + 1))
-                for start, end in getattr(tkw, "ratio_token_other_slices", []):
+                for start, end in normalize_token_slices(getattr(tkw, "ratio_token_other_slices", [])):
                     final_stop_tokens.extend(range(start, end))
             else:
                 if "recaption" in bot_task:
@@ -3321,7 +3322,7 @@ class HunyuanImage3ForCausalMM(HunyuanImage3PreTrainedModel, GenerationMixin):
                         trigger_token_ids=[tkw.size_token_id(image_base_size)],
                         vocab_start=tkw.start_ratio_token_id,
                         vocab_end=tkw.end_ratio_token_id + 1,
-                        other_slices=getattr(tkw, "ratio_token_other_slices", []),
+                        other_slices=normalize_token_slices(getattr(tkw, "ratio_token_other_slices", [])),
                         force_greedy=True,
                     )
                 ])
@@ -3414,4 +3415,3 @@ __all__ = [
     "apply_rotary_pos_emb",
     "build_batch_2d_rope",
 ]
-

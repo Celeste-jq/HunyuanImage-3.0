@@ -25,6 +25,7 @@ import torch.nn.functional as F
 from diffusers.utils import BaseOutput
 
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
+from .token_slice_utils import normalize_token_slices
 
 
 def default(value, default_value):
@@ -611,11 +612,12 @@ class HunyuanImage3TokenizerFast(PreTrainedTokenizerFast):
         self.start_ratio_token_id = self.convert_tokens_to_ids("<img_ratio_0>")
         self.end_ratio_token_id = self.convert_tokens_to_ids("<img_ratio_32>")
         if self.model_version == "HunyuanImage-3.0":
-            self.ratio_token_other_slices = [self.convert_tokens_to_ids("<img_ratio_33>")]
+            ratio_token_other_slices = [self.convert_tokens_to_ids("<img_ratio_33>")]
         else:
-            self.ratio_token_other_slices = [
+            ratio_token_other_slices = [
                 (self.convert_tokens_to_ids("<img_ratio_33>"), self.convert_tokens_to_ids("<img_ratio_36>") + 1)
             ]
+        self.ratio_token_other_slices = normalize_token_slices(ratio_token_other_slices)
 
     @property
     def max_token_id(self):

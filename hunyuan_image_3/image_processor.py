@@ -28,6 +28,7 @@ from torchvision import transforms
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.image_utils import load_image
 from transformers.models.siglip2.image_processing_siglip2_fast import Siglip2ImageProcessorFast
+from .token_slice_utils import normalize_token_slices
 from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList
 
 from .tokenization_hunyuan_image_3 import ImageInfo, ImageTensor, CondImage, Resolution, ResolutionGroup
@@ -607,7 +608,7 @@ class HunyuanImage3ImageProcessor(object):
                 SliceVocabLogitsProcessor(
                     vocab_start=tokenizer.start_ratio_token_id,
                     vocab_end=tokenizer.end_ratio_token_id + 1,
-                    other_slices=getattr(tokenizer, "ratio_token_other_slices", []),
+                    other_slices=normalize_token_slices(getattr(tokenizer, "ratio_token_other_slices", [])),
                 )
             )
 
